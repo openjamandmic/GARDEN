@@ -172,6 +172,10 @@ dialog .dbody{padding:1.2em; overflow:auto; max-height:88vh}
 .kv{display:grid; grid-template-columns:auto 1fr; gap:.2em .8em; font-size:.9rem}
 .kv b{color:var(--muted); font-weight:600}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
+.tour-hl{outline:3px solid var(--sun) !important; outline-offset:3px; border-radius:8px}
+#tour{position:fixed; left:0; right:0; bottom:0; z-index:40; padding:1em; padding-bottom:calc(1em + env(safe-area-inset-bottom,0px)); display:flex; justify-content:center; pointer-events:none}
+.tour-card{pointer-events:auto; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:1em 1.1em; max-width:460px; width:100%}
+.tour-card p{margin:.3em 0 .8em}
 @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important} }
 </style>
 </head>
@@ -672,10 +676,10 @@ function seasonInfo(m){
 /* ============================================================ state */
 const KEY='plotAndSeason.v1', LIBKEY='plotAndSeason.library.v1';
 let state=null, library={customPlants:[]};
-const ui={tab:'plot',sel:null,filter:{cat:'',q:'',sort:'best',shoulder:false},calCat:'',brush:'full',wizStep:0,wizDrag:false,paintZoom:1,rectMode:false,anchor:null};
-function fresh(){return {version:2,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,rows:40,cols:27,north:0,plots:{},house:{},settings:{dateOverride:null,theme:'auto',zoom:null}};}
+const ui={tab:'plot',sel:null,filter:{cat:'',q:'',sort:'best',shoulder:false,all:false},calCat:'',brush:'full',wizStep:0,wizDrag:false,paintZoom:1,rectMode:false,anchor:null};
+function fresh(){return {version:3,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,rows:40,cols:27,north:0,plots:{},house:{},crops:null,settings:{dateOverride:null,theme:'auto',zoom:null,tutorial:true}};}
 function dimsFromProperty(w,d){ return {cols:Math.max(1,Math.min(100,Math.ceil(w/3))),rows:Math.max(1,Math.min(100,Math.ceil(d/3)))}; }
-function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null},s.settings||{}); if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } return s;} }catch(e){} return fresh(); }
+function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null,tutorial:true},s.settings||{}); if(s.crops===undefined)s.crops=null; if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } return s;} }catch(e){} return fresh(); }
 function loadLibrary(){ try{const raw=localStorage.getItem(LIBKEY); if(raw){const l=JSON.parse(raw); if(l&&Array.isArray(l.customPlants)) return l;} }catch(e){} return {customPlants:[]}; }
 function saveLibrary(){ try{localStorage.setItem(LIBKEY,JSON.stringify(library));}catch(e){storageOK=false;} }
 function migrateLibrary(){ // custom plants used to live inside the garden; move them to the shared library once
@@ -695,6 +699,9 @@ function normalizeCustom(c){ return Object.assign({},c,{custom:true}); }
 function allPlants(){ return PLANTS.concat(library.customPlants.map(normalizeCustom)); }
 function plantById(id){ return allPlants().find(p=>p.id===id); }
 function windows(p){ return {prime:parseMonths(p.m),shoulder:parseMonths(p.sh)}; }
+function growing(id){ return !state.crops || state.crops.includes(id); }   // null = everything
+function toggleCrop(id,on){ if(!state.crops) state.crops=allPlants().map(p=>p.id); if(on){ if(!state.crops.includes(id)) state.crops.push(id); } else state.crops=state.crops.filter(x=>x!==id); }
+const STARTER_CROPS=['tomato','cherry-tomato','pepper-sweet','pepper-hot','cucumber','squash-summer','bush-bean','pole-bean','lettuce','kale','collards','swiss-chard','arugula','carrot','radish','beet','onion-green','garlic','potato','sweet-potato','okra','southern-pea','basil','cilantro','parsley','rosemary','mint','oregano','strawberry','seminole-pumpkin','everglades-tomato','sweet-potato-greens'];
 function seasonScore(p,month){
   const w=windows(p); const next=month%12+1;
   if(w.prime.has(month)) return {s:2,label:w.prime.size<12&&!w.prime.has(next)?'Last call':'In season',cls:w.prime.has(next)||w.prime.size===12?'good':'ok',last:!w.prime.has(next)&&w.prime.size<12};
@@ -714,7 +721,7 @@ function suggestions(plot,month,opts={}){
   const ex=plot.exposure; const last=plot.history?.[plot.history.length-1]; const lastFam=last?plantById(last.pid)?.fam:null;
   let list=allPlants().map(p=>{const se=seasonScore(p,month), su=sunScore(p,ex,month);
     return {p,se,su,score:se.s*10+su.s*4-(p.d[0]/400),rot:lastFam&&p.fam===lastFam};});
-  list=list.filter(x=>x.se.s>0 && x.su.s>0 && (opts.shoulder||x.se.s===2));
+  list=list.filter(x=>x.se.s>0 && x.su.s>0 && (opts.shoulder||x.se.s===2) && (opts.all||growing(x.p.id)));
   return list;
 }
 
@@ -915,7 +922,7 @@ function renderPlot(){
   h+=`</div>`; return h;
 }
 function renderPlantNow(plot,m){
-  const f=ui.filter; let list=suggestions(plot,m,{shoulder:f.shoulder});
+  const f=ui.filter; let list=suggestions(plot,m,{shoulder:f.shoulder,all:f.all});
   if(f.cat) list=list.filter(x=>f.cat==='__perennial'?x.p.perennial:x.p.cat===f.cat);
   if(f.q){const q=f.q.toLowerCase(); list=list.filter(x=>(x.p.n+' '+x.p.v+' '+x.p.cat).toLowerCase().includes(q));}
   if(f.sort==='best') list.sort((a,b)=>b.score-a.score||a.p.d[0]-b.p.d[0]);
@@ -926,8 +933,8 @@ function renderPlantNow(plot,m){
   <div class="row"><input placeholder="Search plants or varieties" value="${esc(f.q)}" data-act="filter-q" style="flex:1;min-width:140px">
     <select data-act="filter-cat" style="width:auto"><option value="">All types</option><option value="__perennial" ${f.cat==='__perennial'?'selected':''}>Perennials only</option>${CATS.map(c=>`<option ${f.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
     <select data-act="filter-sort" style="width:auto"><option value="best" ${f.sort==='best'?'selected':''}>Best match</option><option value="fast" ${f.sort==='fast'?'selected':''}>Fastest harvest</option><option value="long" ${f.sort==='long'?'selected':''}>Longest season</option><option value="az" ${f.sort==='az'?'selected':''}>A–Z</option></select>
-    <label style="margin:0;display:flex;align-items:center;gap:.3em;font-weight:400"><input type="checkbox" data-act="filter-shoulder" ${f.shoulder?'checked':''} style="width:auto">Include off-peak</label></div>
-  <p class="tiny muted">${list.length} match${list.length===1?'':'es'} for a ${EXPOSURES[plot.exposure].short.toLowerCase()} plot. Not listed? <a href="#" data-act="custom-new">Add your own plant</a>.</p>
+    <label style="margin:0;display:flex;align-items:center;gap:.3em;font-weight:400"><input type="checkbox" data-act="filter-shoulder" ${f.shoulder?'checked':''} style="width:auto">Include off-peak</label>${state.crops?`<label style="margin:0;display:flex;align-items:center;gap:.3em;font-weight:400"><input type="checkbox" data-act="filter-all" ${f.all?'checked':''} style="width:auto">Beyond my crop list</label>`:''}</div>
+  <p class="tiny muted">${list.length} match${list.length===1?'':'es'} for a ${EXPOSURES[plot.exposure].short.toLowerCase()} plot${state.crops&&!f.all?' from your crop list':''}. Not listed? <a href="#" data-act="custom-new">Add your own plant</a> or <a href="#" data-act="choose-crops">edit your crop list</a>.</p>
   <div>${list.map(x=>plantItemHTML(x)).join('')||'<p class="muted">Nothing fits this plot right now. Try including off-peak crops, or change the plot\'s exposure.</p>'}</div>`;
 }
 function renderTasks(){
@@ -971,7 +978,8 @@ function renderPlantsTab(){
   let h=`<div class="stack"><div class="row between"><h2>Plant library</h2><button class="primary small" data-act="custom-new">+ Add a plant</button></div>
   <p class="tiny muted">${PLANTS.length} edibles researched for zone 10a/10b (UF/IFAS South Florida windows and varieties), ${PLANTS.filter(p=>p.perennial).length} of them perennial, plus ${library.customPlants.length} of your own (kept in a shared library that survives garden resets).</p>
   <div class="row"><input placeholder="Search" value="${esc(f.q)}" data-act="filter-q" style="flex:1;min-width:140px"><select data-act="filter-cat" style="width:auto"><option value="">All types</option><option value="__perennial" ${f.cat==='__perennial'?'selected':''}>Perennials only</option>${CATS.map(c=>`<option ${f.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
-  let cat=''; list.forEach(p=>{ if(p.cat!==cat){cat=p.cat;h+=`<h3 style="margin-top:.8em">${esc(cat)}</h3>`;} h+=plantItemHTML({p,se:seasonScore(p,curMonth())}); });
+  h+=`<p class="tiny muted">Tick the crops you grow — suggestions on each plot come from this list. ${state.crops?`${state.crops.length} selected.`:'All selected.'} <a href="#" data-act="choose-crops">Pick them in one screen</a>.</p>`;
+  let cat=''; list.forEach(p=>{ if(p.cat!==cat){cat=p.cat;h+=`<h3 style="margin-top:.8em">${esc(cat)}</h3>`;} h+=`<div class="row" style="flex-wrap:nowrap;align-items:stretch"><label style="margin:0;display:flex;align-items:center;padding:0 .4em" title="I grow this"><input type="checkbox" data-act="crop" data-pid="${p.id}" ${growing(p.id)?'checked':''} style="width:auto"></label><div style="flex:1;min-width:0">${plantItemHTML({p,se:seasonScore(p,curMonth())})}</div></div>`; });
   return h+`</div>`;
 }
 function renderSettings(){
@@ -981,6 +989,8 @@ function renderSettings(){
   <label>Planning date <span class="hint">— look ahead to see what a plot needs on another date. Leave blank for today.</span></label>
   <div class="row"><input type="date" value="${state.settings.dateOverride||''}" data-act="set-date" style="flex:1"><button class="small" data-act="set-date-clear">Back to today</button></div>
   <label>Theme</label><select data-act="set-theme"><option value="auto" ${state.settings.theme==='auto'?'selected':''}>Match device</option><option value="light" ${state.settings.theme==='light'?'selected':''}>Light</option><option value="dark" ${state.settings.theme==='dark'?'selected':''}>Dark</option></select>
+  <hr><h3>My crops</h3><p class="tiny muted">${state.crops?state.crops.length+' crops selected':'All crops'} — these are what each plot's suggestions come from.</p><button data-act="choose-crops">Choose my crops</button>
+  <hr><h3>Tutorial</h3><label style="display:flex;align-items:center;gap:.5em;font-weight:400"><input type="checkbox" data-act="set-tutorial" ${state.settings.tutorial!==false?'checked':''} style="width:auto">Show the tutorial after setup</label><button class="small" data-act="tour-start">Replay the tutorial now</button>
   <hr><h3>Layout</h3><p class="tiny muted">Add or remove plots, change exposures and re-point north. Plantings on plots you keep are preserved.</p>
   <button data-act="edit-layout">Edit garden layout</button>
   <hr><h3>Plant library</h3><p class="tiny muted">${library.customPlants.length} custom plant${library.customPlants.length===1?'':'s'}. The library is stored separately from the garden, so it survives "Start over" and can be shared: export it here and import it on another computer (imports merge; a plant with the same name updates the existing one).</p>
@@ -1046,12 +1056,13 @@ function saveCustom(){
   const rec={id,n:fd.get('n').trim(),e:(fd.get('e')||'🌱').trim()||'🌱',cat:fd.get('cat'),fam:fd.get('fam').trim()||'Unknown',sun:fd.get('sun'),m:monthsToStr(new Set(months)),sh:monthsToStr(new Set(sh)),
     d:[Number(fd.get('d0')),Number(fd.get('d1'))].sort((a,b)=>a-b),per:Number(fd.get('per')),how:fd.get('how').trim()||'Seed or transplant',temp:[Number(fd.get('t0')),Number(fd.get('t1'))],heat:fd.get('heat'),harv:fd.get('harv'),prod:Number(fd.get('prod'))||0,v:fd.get('v').trim()||'—',note:fd.get('note').trim(),perennial:fd.get('perennial')==='on',trellis:fd.get('trellis')==='on'};
   const i=library.customPlants.findIndex(c=>c.id===id); if(i>=0) library.customPlants[i]=rec; else library.customPlants.push(rec);
-  saveLibrary(); closeDialog(); toast(`Saved ${rec.n}`); render();
+  saveLibrary(); if(state.crops&&!state.crops.includes(id)){state.crops.push(id); save();} closeDialog(); toast(`Saved ${rec.n}`); render();
 }
 
 /* ============================================================ wizard */
+function cropCountText(){ const n=state.crops?state.crops.length:allPlants().length; return `${n} crop${n===1?'':'s'} selected`; }
 function renderWizard(){
-  const step=ui.wizStep; const steps=['Zone','Layout','Map plots'];
+  const step=ui.wizStep; const steps=['Zone','Layout','Map plots','Crops'];
   let body='';
   if(step===0) body=`<h2>Where is the garden?</h2><p class="help">Only zone 10 is built out so far. The planting windows, varieties and heat warnings are tuned for South Florida's upside-down calendar: the main season runs October through March, and summer is for tropicals.</p>
     <div class="zone-pick">${ZONES.map(z=>`<button class="${state.zone===z.id?'active':''} ${z.on?'':'soon'}" data-act="wiz-zone" data-zone="${z.id}" ${z.on?'':'disabled'}><b>${z.name}</b><span class="tiny">${esc(z.desc)}</span></button>`).join('')}</div>
@@ -1072,7 +1083,17 @@ function renderWizard(){
         <button class="${ui.brush==='erase'?'active':''}" data-act="brush" data-brush="erase"><span style="width:22px;text-align:center">✕</span><span>Erase (lawn / open ground)</span></button></div>
         <div class="compass"><div class="rose" data-act="rotate" title="Click to rotate"><i style="transform:rotate(${state.north}deg)"></i><b style="top:4px">N</b><b style="right:6px">E</b><b style="bottom:4px">S</b><b style="left:4px">W</b></div><div class="tiny muted">North points <b>${state.north}°</b> from the top of the map. Click to rotate. The sun crosses the south side of your garden, so anything tall on a plot's south edge will shade it in winter.</div></div>
       </div></div>
-    <div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-finish" ${Object.keys(state.plots).length?'':'disabled'}>Open my garden</button></div>`;
+    <div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-next" ${Object.keys(state.plots).length?'':'disabled'}>Continue</button></div>`;
+  }
+  if(step===3){
+    if(!state.crops){ state.crops=STARTER_CROPS.filter(id=>plantById(id)); save(); }
+    const q=(ui.wq||'').toLowerCase(); let list=allPlants(); if(q) list=list.filter(p=>(p.n+' '+p.v+' '+p.cat).toLowerCase().includes(q)); if(ui.wcat) list=list.filter(p=>ui.wcat==='__perennial'?p.perennial:p.cat===ui.wcat);
+    list.sort((a,b)=>a.cat.localeCompare(b.cat)||a.n.localeCompare(b.n));
+    body=`<h2>What will you grow?</h2><p class="help">Tick the crops you actually want in the garden. Each plot's "what to plant now" list is drawn from these, filtered by season and that plot's sun. We pre-ticked ${STARTER_CROPS.length} South Florida favorites; untick freely, and add anything missing with your own parameters.</p>
+    <div class="row"><input placeholder="Search plants or varieties" value="${esc(ui.wq||'')}" data-act="wq" style="flex:1;min-width:160px"><select data-act="wcat" style="width:auto"><option value="">All types</option><option value="__perennial" ${ui.wcat==='__perennial'?'selected':''}>Perennials only</option>${CATS.map(c=>`<option ${ui.wcat===c?'selected':''}>${esc(c)}</option>`).join('')}</select><span class="tiny muted" id="cropCount">${cropCountText()}</span><button class="small" data-act="crops-all">Select all shown</button><button class="small" data-act="crops-none">Clear shown</button><button class="small primary" data-act="custom-new">+ Add a plant</button></div>`;
+    let cat=''; list.forEach(p=>{ if(p.cat!==cat){cat=p.cat; body+=`<h3 style="margin-top:1em">${esc(cat)}</h3>`;} const w=windows(p); const m=curMonth();
+      body+=`<label class="row" style="flex-wrap:nowrap;padding:.35em .2em;border-bottom:1px solid var(--line);margin:0;font-weight:400;cursor:pointer"><input type="checkbox" data-act="crop" data-pid="${p.id}" ${growing(p.id)?'checked':''} style="width:auto"><span style="font-size:1.3rem;width:1.5em;text-align:center">${p.e}</span><span style="flex:1;min-width:0"><b>${esc(p.n)}</b>${p.perennial?' <span class="chip info">perennial</span>':''}${p.custom?' <span class="chip">custom</span>':''}<br><span class="tiny muted">${p.sun==='full'?'full sun':p.sun==='partial'?'part sun':'shade ok'} · ${p.d[0]}–${p.d[1]} days · plant ${esc(monthLabel(w.prime))}</span></span>${w.prime.has(m)?'<span class="chip good">now</span>':''}<button class="tiny ghost" data-act="detail" data-pid="${p.id}" onclick="event.preventDefault()">info</button></label>`; });
+    body+=`<div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-finish" ${state.crops.length?'':'disabled'}>Open my garden</button></div>`;
   }
   $('#app').innerHTML=`<div class="wizard">
     <div class="hero"><div><h1>Plot &amp; Season</h1><p>A top-down manager for a South Florida edible garden. Map your 3×3 plots, mark how much sun each one gets, and it tells you what to plant next, when to harvest, and what to clear.</p></div>
@@ -1090,7 +1111,7 @@ function paintCell(k){
   else { delete state.house[k]; const p=state.plots[k]; if(p) p.exposure=ui.brush; else state.plots[k]={exposure:ui.brush,plant:null,tasks:[],history:[]}; }
 }
 function paintAndRefresh(k){ const before=JSON.stringify([state.plots[k]||null,!!state.house[k]]); paintCell(k); if(JSON.stringify([state.plots[k]||null,!!state.house[k]])===before) return;
-  save(); const b=$(`#paintgrid button[data-k="${k}"]`); if(b){ const [r,c]=k.split('-').map(Number); b.outerHTML=paintCellHTML(r,c,paintCellPx()); } const pc=$('#paintCount'); if(pc) pc.textContent=paintCountText(); const fin=$('[data-act="wiz-finish"]'); if(fin) fin.disabled=!Object.keys(state.plots).length; }
+  save(); const b=$(`#paintgrid button[data-k="${k}"]`); if(b){ const [r,c]=k.split('-').map(Number); b.outerHTML=paintCellHTML(r,c,paintCellPx()); } const pc=$('#paintCount'); if(pc) pc.textContent=paintCountText(); const fin=$('.painter')?.closest('.wizard')?.querySelector('[data-act="wiz-next"].primary, [data-act="wiz-finish"]'); if(fin) fin.disabled=!Object.keys(state.plots).length; }
 function wirePaint(){
   const g=$('#paintgrid'); if(!g) return;
   g.addEventListener('pointerdown',e=>{const b=e.target.closest('button[data-k]'); if(!b) return; e.preventDefault(); const k=b.dataset.k;
@@ -1100,6 +1121,23 @@ function wirePaint(){
 }
 document.addEventListener('pointerup',()=>ui.wizDrag=false);
 let _rz; window.addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(()=>{ if(state&&state.setup&&!state.settings.zoom) render(); else if(state&&!state.setup&&ui.wizStep===2) renderWizard(); },200);});
+
+/* ============================================================ tutorial */
+const TOUR=[
+ {sel:null,t:'Welcome to Plot & Season',b:'A one-minute tour. Replay it any time from Settings, or switch it off there.'},
+ {sel:'.mapwrap',t:'Your garden from above',b:'Every square is a 3 ft plot in its real spot on the property. Badges: green = ready to plant, yellow = harvest, red = clear it, blue dot = heat or cold watch. Use − / Fit / + to zoom; tap the compass to rotate north.'},
+ {sel:'[data-tab="plot"]',t:'Tap a plot',b:'An empty plot shows what you can plant right now — from your crop list, filtered by the month and that plot\'s sun. A planted plot shows days to harvest, reminders, and what could follow it.'},
+ {sel:'[data-tab="tasks"]',t:'Tasks',b:'Everything that needs doing across the garden this week, plus month notes for zone 10.'},
+ {sel:'[data-tab="calendar"]',t:'Calendar',b:'When each crop goes in the ground here — October to March is the main season, summer is for tropicals.'},
+ {sel:'[data-tab="plants"]',t:'Library',b:'All 131 researched edibles plus your own. Tick the ones you grow, or add a plant with its own parameters.'},
+ {sel:'[data-tab="settings"]',t:'Settings',b:'Change your crop list, edit the layout, plan for a future date, and export a backup. Done!'},
+];
+let tourI=-1;
+function startTour(){ tourI=0; showTour(); }
+function showTour(){ document.querySelectorAll('.tour-hl').forEach(e=>e.classList.remove('tour-hl')); let box=$('#tour'); if(tourI<0||tourI>=TOUR.length){ if(box) box.remove(); tourI=-1; return; }
+  const s=TOUR[tourI]; if(!box){ box=document.createElement('div'); box.id='tour'; document.body.appendChild(box); }
+  const el=s.sel?document.querySelector(s.sel):null; if(el){ el.classList.add('tour-hl'); el.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+  box.innerHTML=`<div class="tour-card"><div class="tiny muted">Step ${tourI+1} of ${TOUR.length}</div><h3>${esc(s.t)}</h3><p>${esc(s.b)}</p><div class="row between"><button class="ghost small" data-act="tour-skip">${tourI===TOUR.length-1?'Close':'Skip tour'}</button><div class="row">${tourI>0?'<button class="small" data-act="tour-prev">Back</button>':''}${tourI<TOUR.length-1?'<button class="small primary" data-act="tour-next">Next</button>':'<button class="small primary" data-act="tour-skip">Done</button>'}</div></div></div>`; }
 
 /* ============================================================ actions */
 function scrollToPlot(k){ const el=document.querySelector(`g.plot[data-k="${k}"]`); if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',inline:'center'}); }
@@ -1147,7 +1185,13 @@ document.addEventListener('click',e=>{
     case 'wiz-zone': state.zone=el.dataset.zone; save(); renderWizard(); break;
     case 'wiz-next': if(ui.wizStep===1){ const w=Math.max(3,Math.min(300,Number($('#wW').value)||80)), d=Math.max(3,Math.min(300,Number($('#wD').value)||120)); const {rows:r,cols:c}=dimsFromProperty(w,d); state.propW=w; state.propD=d; state.rows=r; state.cols=c; state.settings.zoom=null; state.name=$('#wName').value.trim()||'My garden'; [state.plots,state.house].forEach(o=>Object.keys(o).forEach(k=>{const [rr,cc]=k.split('-').map(Number); if(rr>=r||cc>=c) delete o[k];})); } ui.wizStep++; save(); renderWizard(); break;
     case 'wiz-back': ui.wizStep=Math.max(0,ui.wizStep-1); renderWizard(); break;
-    case 'wiz-finish': state.setup=true; ui.wizStep=0; save(); render(); { const first=Object.keys(state.plots)[0]; if(first) scrollToPlot(first); } break;
+    case 'wiz-finish': state.setup=true; ui.wizStep=0; save(); render(); { const first=Object.keys(state.plots)[0]; if(first) scrollToPlot(first); } if(state.settings.tutorial!==false) startTour(); break;
+    case 'choose-crops': state.setup=false; ui.wizStep=3; save(); renderWizard(); break;
+    case 'crops-all': case 'crops-none': { const on=act==='crops-all'; document.querySelectorAll('[data-act="crop"]').forEach(cb=>{ toggleCrop(cb.dataset.pid,on); cb.checked=on; }); save(); const c=$('#cropCount'); if(c) c.textContent=cropCountText(); break; }
+    case 'tour-next': tourI++; showTour(); break;
+    case 'tour-prev': tourI--; showTour(); break;
+    case 'tour-skip': tourI=-1; showTour(); break;
+    case 'tour-start': startTour(); break;
     case 'pz': { const cur=ui.paintZoom||1; ui.paintZoom = el.dataset.z==='fit'?1: el.dataset.z==='+'?Math.min(6,cur*1.5):Math.max(0.5,cur/1.5); renderWizard(); break; }
     case 'rect-mode': ui.rectMode=!ui.rectMode; ui.anchor=null; renderWizard(); break;
     case 'brush': ui.brush=el.dataset.brush; document.querySelectorAll('[data-act="brush"]').forEach(b=>b.classList.toggle('active',b.dataset.brush===ui.brush)); break;
@@ -1169,18 +1213,23 @@ document.addEventListener('change',e=>{
     case 'filter-cat': ui.filter.cat=el.value; render(); break;
     case 'filter-sort': ui.filter.sort=el.value; render(); break;
     case 'filter-shoulder': ui.filter.shoulder=el.checked; render(); break;
+    case 'filter-all': ui.filter.all=el.checked; render(); break;
+    case 'crop': toggleCrop(el.dataset.pid,el.checked); save(); if(!state.setup){const c=$('#cropCount'); if(c) c.textContent=cropCountText();} else render(); break;
     case 'cal-cat': ui.calCat=el.value; render(); break;
+    case 'wcat': ui.wcat=el.value; renderWizard(); break;
     case 'task-toggle': { const t=state.plots[ui.sel].tasks.find(t=>String(t.id)===el.dataset.id); if(t){t.done=el.checked; save(); render();} break; }
     case 'notes': state.plots[ui.sel].plant.notes=el.value; save(); break;
     case 'set-name': state.name=el.value.trim()||'My garden'; save(); render(); break;
     case 'set-zone': state.zone=el.value; save(); render(); break;
     case 'set-date': state.settings.dateOverride=el.value||null; save(); render(); break;
     case 'set-theme': state.settings.theme=el.value; save(); render(); break;
+    case 'set-tutorial': state.settings.tutorial=el.checked; save(); break;
   }
   if(e.target.id==='importFile' && e.target.files[0]) importData(e.target.files[0]);
   if(e.target.id==='importLibFile' && e.target.files[0]) importLibraryFile(e.target.files[0]);
 });
 document.addEventListener('input',e=>{
+  const wq=e.target.closest('[data-act="wq"]'); if(wq){ ui.wq=wq.value; const pos=wq.selectionStart; renderWizard(); const n=$('[data-act="wq"]'); if(n){n.focus(); n.setSelectionRange(pos,pos);} return; }
   const el=e.target.closest('[data-act="filter-q"]'); if(!el) return;
   ui.filter.q=el.value; const pb=$('#panelBody'); const pos=el.selectionStart; pb.innerHTML=renderPanel(); const n=pb.querySelector('[data-act="filter-q"]'); if(n){n.focus(); n.setSelectionRange(pos,pos);}
 });
