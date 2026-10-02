@@ -20,7 +20,7 @@
   --moss:#3D6C38; --moss-ink:#F4F7EE; --moss-soft:#D9E7CF;
   --soil:#8C5B33; --soil-dark:#5B3A1D; --soil-light:#B98A5C;
   --sun:#E5B23A; --sun-soft:#FBEFCB; --alert:#C2432B; --alert-soft:#F7D9D2; --water:#3B7CA3; --water-soft:#D5E6F0;
-  --lawn:#B4CB98; --lawn-line:#9DB884; --house:#D8D3C4; --house-ink:#6B6455; --shadow:0 1px 2px rgba(27,36,24,.08),0 8px 24px rgba(27,36,24,.08);
+  --lawn:#B4CB98; --lawn-line:#9DB884; --house:#D8D3C4; --house-ink:#6B6455; --nursery:#DCE8B8; --nursery-line:#B9CC8A; --shadow:0 1px 2px rgba(27,36,24,.08),0 8px 24px rgba(27,36,24,.08);
   --r:10px; --cell:96px;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -29,14 +29,14 @@
   --moss:#7FB574; --moss-ink:#111811; --moss-soft:#2C4028;
   --soil:#7A4E2A; --soil-dark:#4A2E15; --soil-light:#A1704A;
   --sun:#E8B848; --sun-soft:#4A3C15; --alert:#E0644C; --alert-soft:#4B231B; --water:#6AA7CF; --water-soft:#1D3242;
-  --lawn:#2F4128; --lawn-line:#3E5535; --house:#4A4A44; --house-ink:#C9C4B4; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --lawn:#2F4128; --lawn-line:#3E5535; --house:#4A4A44; --house-ink:#C9C4B4; --nursery:#3E5230; --nursery-line:#5C7445; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
 }}
 :root[data-theme="dark"]{
   --bg:#141A12; --panel:#1E261C; --panel-2:#26301F; --ink:#E8EBDD; --muted:#A3AC97; --line:#3A4634;
   --moss:#7FB574; --moss-ink:#111811; --moss-soft:#2C4028;
   --soil:#7A4E2A; --soil-dark:#4A2E15; --soil-light:#A1704A;
   --sun:#E8B848; --sun-soft:#4A3C15; --alert:#E0644C; --alert-soft:#4B231B; --water:#6AA7CF; --water-soft:#1D3242;
-  --lawn:#2F4128; --lawn-line:#3E5535; --house:#4A4A44; --house-ink:#C9C4B4; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --lawn:#2F4128; --lawn-line:#3E5535; --house:#4A4A44; --house-ink:#C9C4B4; --nursery:#3E5230; --nursery-line:#5C7445; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%}
 body{margin:0; height:100%; background:var(--bg); color:var(--ink); font:15px/1.5 "Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased}
@@ -156,6 +156,7 @@ aside.panel{background:var(--panel); border-left:1px solid var(--line); display:
 .paintgrid button{padding:0; border:1px solid var(--lawn-line); background:transparent; border-radius:3px; display:flex; align-items:center; justify-content:center}
 .paintgrid button.plot{background:var(--soil); border-color:var(--soil-dark)}
 .paintgrid button.house{background:var(--house); border-color:var(--house)}
+.paintgrid button.nursery{background:var(--nursery); border-color:var(--nursery-line); font-size:12px}
 .paintgrid{touch-action:none}
 .paintgrid button:hover{outline:2px solid var(--sun); outline-offset:-2px}
 .compass{display:flex; align-items:center; gap:.8em}
@@ -677,9 +678,9 @@ function seasonInfo(m){
 const KEY='plotAndSeason.v1', LIBKEY='plotAndSeason.library.v1';
 let state=null, library={customPlants:[]};
 const ui={tab:'plot',sel:null,filter:{cat:'',q:'',sort:'best',shoulder:false,all:false},calCat:'',brush:'full',wizStep:0,wizDrag:false,paintZoom:1,rectMode:false,anchor:null};
-function fresh(){return {version:3,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,rows:40,cols:27,north:0,plots:{},house:{},crops:null,settings:{dateOverride:null,theme:'auto',zoom:null,tutorial:true}};}
+function fresh(){return {version:3,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,rows:40,cols:27,north:0,plots:{},house:{},nurseryCells:{},nursery:[],crops:null,settings:{dateOverride:null,theme:'auto',zoom:null,tutorial:true}};}
 function dimsFromProperty(w,d){ return {cols:Math.max(1,Math.min(100,Math.ceil(w/3))),rows:Math.max(1,Math.min(100,Math.ceil(d/3)))}; }
-function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null,tutorial:true},s.settings||{}); if(s.crops===undefined)s.crops=null; if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } return s;} }catch(e){} return fresh(); }
+function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null,tutorial:true},s.settings||{}); if(s.crops===undefined)s.crops=null; s.nurseryCells=s.nurseryCells||{}; s.nursery=s.nursery||[]; if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } return s;} }catch(e){} return fresh(); }
 function loadLibrary(){ try{const raw=localStorage.getItem(LIBKEY); if(raw){const l=JSON.parse(raw); if(l&&Array.isArray(l.customPlants)) return l;} }catch(e){} return {customPlants:[]}; }
 function saveLibrary(){ try{localStorage.setItem(LIBKEY,JSON.stringify(library));}catch(e){storageOK=false;} }
 function migrateLibrary(){ // custom plants used to live inside the garden; move them to the shared library once
@@ -699,6 +700,16 @@ function normalizeCustom(c){ return Object.assign({},c,{custom:true}); }
 function allPlants(){ return PLANTS.concat(library.customPlants.map(normalizeCustom)); }
 function plantById(id){ return allPlants().find(p=>p.id===id); }
 function windows(p){ return {prime:parseMonths(p.m),shoulder:parseMonths(p.sh)}; }
+function startOf(p){ const h=(p.how||'').toLowerCase(); if(/seed or transplant|transplant or seed|seed, sets|seed in oct/.test(h)) return 'either'; if(/transplant|plug|bare-root|nursery/.test(h)) return 'transplant'; if(/cutting|slip|rhizome|division|corm|crown|pup|tree|whole sprouted|seed pieces|cloves|sets|stem|stalk/.test(h)) return 'other'; return 'seed'; }
+function leadOf(p){ const m=(p.how||'').match(/(\d+)(?:[-–](\d+))?\s*wks/); if(m) return Number(m[2]||m[1])*7; if(/pepper|eggplant|celery|leek|onion/i.test(p.n)) return 56; if(p.cat==='Herbs') return 42; if(p.cat==='Leafy greens') return 35; return 42; }
+function nurseryOK(p){ const s=startOf(p); const h=(p.how||'').toLowerCase(); if(/cutting|plug|bare-root|nursery plant|division|pup|never from seed|air-layer|grafted/.test(h)&&!/start seeds|or seed|seed or/.test(h)) return false; return s==='transplant'||s==='either'; }
+const FROM_LABEL={seed:'seed sown in the plot',transplant:'transplant / seedling',other:'cutting, slip, rhizome or plant'};
+function daysAdjust(p,from){ const s=startOf(p); if(from==='seed'&&(s==='transplant'||s==='either')) return leadOf(p); if(from==='transplant'&&s==='seed') return -Math.min(21,Math.round(p.d[0]*0.3)); return 0; }
+function effDays(p,pl){ const adj=pl&&pl.adj?pl.adj:0; return [p.d[0]+adj,p.d[1]+adj]; }
+function trayStatus(t){ const p=plantById(t.pid); if(!p) return {phase:'unknown',daysIn:0,lead:42,text:'Plant record missing'}; const lead=leadOf(p); const daysIn=Math.floor((today()-parseISO(t.sown))/DAY); const ready=daysIn>=Math.round(lead*0.85); const late=daysIn>lead+21;
+  return {p,lead,daysIn,ready,late,pct:Math.min(1,daysIn/lead),text: late?`${daysIn} days in — getting leggy, transplant now or pot up`: ready?`Ready to transplant (${daysIn} days)`:`Growing — ready around ${fmt(addDays(t.sown,lead))}`}; }
+function sowNowCrops(){ const m=today(); const out=[]; allPlants().forEach(p=>{ if(!growing(p.id)||!nurseryOK(p)) return; const t=addDays(m,leadOf(p)); const w=windows(p); if(!w.prime.has(t.getMonth()+1)) return; if(state.nursery.some(x=>x.pid===p.id)) return; out.push(p); }); return out; }
+function readyTrays(pid){ return state.nursery.filter(t=>t.pid===pid&&trayStatus(t).ready); }
 function growing(id){ return !state.crops || state.crops.includes(id); }   // null = everything
 function toggleCrop(id,on){ if(!state.crops) state.crops=allPlants().map(p=>p.id); if(on){ if(!state.crops.includes(id)) state.crops.push(id); } else state.crops=state.crops.filter(x=>x!==id); }
 const STARTER_CROPS=['tomato','cherry-tomato','pepper-sweet','pepper-hot','cucumber','squash-summer','bush-bean','pole-bean','lettuce','kale','collards','swiss-chard','arugula','carrot','radish','beet','onion-green','garlic','potato','sweet-potato','okra','southern-pea','basil','cilantro','parsley','rosemary','mint','oregano','strawberry','seminole-pumpkin','everglades-tomato','sweet-potato-greens'];
@@ -738,7 +749,7 @@ function plotStatus(plot){
   const p=plantById(plot.plant.pid); if(!p){ out.phase='unknown'; out.alerts.push({type:'overdue',text:'Plant record missing — clear this plot'}); return out; }
   out.p=p;
   const daysIn=Math.floor((t-parseISO(plot.plant.date))/DAY); out.daysIn=daysIn;
-  const [h0,h1]=p.d; const endProd=h1+(p.harv==='cont'?(p.prod||30):0);
+  const [h0,h1]=effDays(p,plot.plant); const endProd=h1+(p.harv==='cont'?(p.prod||30):0);
   out.h0=h0; out.h1=h1; out.end=endProd;
   if(p.perennial){
     if(daysIn<h0){out.phase='establishing'; out.pct=daysIn/h0; out.text=`Establishing — first harvest around ${fmt(addDays(plot.plant.date,h0))}`;}
@@ -761,7 +772,11 @@ function plotStatus(plot){
   (plot.tasks||[]).forEach(tk=>{ if(tk.done) return; const due=tk.due?parseISO(tk.due):null; if(!due||due-t<=3*DAY) out.alerts.push({type:'task',text:tk.text+(due?` (${due<t?'overdue, ':''}due ${fmt(due)})`:''),taskId:tk.id}); });
   return out;
 }
-function allAlerts(){ const arr=[]; Object.entries(state.plots).forEach(([k,plot])=>{ plotStatus(plot).alerts.forEach(a=>arr.push(Object.assign({k,label:plot.name||plotLabel(...k.split('-').map(Number))},a))); }); return arr; }
+function allAlerts(){ const arr=[]; Object.entries(state.plots).forEach(([k,plot])=>{ plotStatus(plot).alerts.forEach(a=>arr.push(Object.assign({k,label:plot.name||plotLabel(...k.split('-').map(Number))},a))); });
+  const hasNursery=Object.keys(state.nurseryCells).length>0;
+  state.nursery.forEach(t=>{ const st=trayStatus(t); if(st.late) arr.push({nursery:true,label:'Nursery',type:'overdue',text:`${st.p?.n||'Tray'}: seedlings are ${st.daysIn} days old — transplant or pot up`}); else if(st.ready) arr.push({nursery:true,label:'Nursery',type:'harvest',text:`${st.p?.n||'Tray'}: ${t.qty||''} seedling${t.qty===1?'':'s'} ready to transplant`}); });
+  const sow=sowNowCrops(); if(sow.length) arr.push({nursery:true,label:'Nursery',type:'plant',text:`Start seeds now for ${sow.slice(0,4).map(p=>p.n.split(/[,(]/)[0].trim()).join(', ')}${sow.length>4?` and ${sow.length-4} more`:''} — transplants will be ready when their window opens${hasNursery?'':' (paint a nursery area in Edit layout first)'}`});
+  return arr; }
 
 /* ============================================================ rendering: shell */
 function render(){
@@ -781,6 +796,7 @@ function render(){
     <aside class="panel">
       <div class="tabs">
         <button data-act="tab" data-tab="plot" class="${ui.tab==='plot'?'active':''}">Plot</button>
+        <button data-act="tab" data-tab="nursery" class="${ui.tab==='nursery'?'active':''}">Nursery${state.nursery.some(t=>trayStatus(t).ready)?`<span class="n" style="background:var(--sun);color:var(--ink)">${state.nursery.filter(t=>trayStatus(t).ready).length}</span>`:''}</button>
         <button data-act="tab" data-tab="tasks" class="${ui.tab==='tasks'?'active':''}">Tasks${urgent?`<span class="n">${urgent}</span>`:''}</button>
         <button data-act="tab" data-tab="calendar" class="${ui.tab==='calendar'?'active':''}">Calendar</button>
         <button data-act="tab" data-tab="plants" class="${ui.tab==='plants'?'active':''}">Library</button>
@@ -809,6 +825,7 @@ function renderMap(){
   for(let r=0;r<R;r++) for(let c=0;c<Co;c++){
     const x=PADL+c*C, y=PADT+r*C, k=plotKey(r,c), plot=state.plots[k];
     if(state.house[k]){ s+=`<rect x="${x}" y="${y}" width="${C}" height="${C}" fill="var(--house)" stroke="var(--house)" stroke-width="1"/>`; continue; }
+    if(state.nurseryCells[k]){ s+=`<g data-nursery="1" style="cursor:pointer"><rect x="${x}" y="${y}" width="${C}" height="${C}" fill="var(--nursery)" stroke="var(--nursery-line)" stroke-width="1"/>${C>=24?`<text x="${x+C/2}" y="${y+C/2}" font-size="${C*.5}" text-anchor="middle" dominant-baseline="middle">🌱</text>`:''}</g>`; continue; }
     if(!plot){ if(C>=16) s+=`<rect x="${x+1}" y="${y+1}" width="${C-2}" height="${C-2}" rx="${4*sc}" fill="none" stroke="var(--lawn-line)" stroke-dasharray="2 3"/>`; continue; }
     const st=plotStatus(plot); const sel=ui.sel===k; const p=st.p;
     const soil = plot.exposure==='shade'||plot.exposure==='mostly_shade' ? 'var(--soil-dark)' : 'var(--soil)';
@@ -850,6 +867,8 @@ function renderMap(){
   // house label at centroid
   const hk=Object.keys(state.house); if(hk.length){ let sr=0,sc2=0; hk.forEach(k=>{const [r,c]=k.split('-').map(Number); sr+=r; sc2+=c;}); const hx=PADL+(sc2/hk.length+.5)*C, hy=PADT+(sr/hk.length+.5)*C;
     s+=`<text x="${hx}" y="${hy}" font-size="${Math.max(11,Math.min(22,C*.3))}" text-anchor="middle" dominant-baseline="middle" fill="var(--house-ink)" font-weight="700" font-family="Fraunces,Georgia,serif" pointer-events="none">House</text>`; }
+  const nk=Object.keys(state.nurseryCells); if(nk.length&&C>=14){ let sr=0,sc3=0; nk.forEach(k=>{const [r,c]=k.split('-').map(Number); sr+=r; sc3+=c;}); const nx=PADL+(sc3/nk.length+.5)*C, ny=PADT+(sr/nk.length+.5)*C; const live=state.nursery.length;
+    s+=`<text x="${nx}" y="${ny+C*.55+10}" font-size="${Math.max(10,Math.min(14,C*.28))}" text-anchor="middle" fill="var(--ink)" font-weight="700" pointer-events="none">Nursery${live?` · ${live} tray${live===1?'':'s'}`:''}</text>`; }
   // compass + sun path
   const cx=W-PADR-30, cy=32; const n=state.north; const e=n+90, w=n-90, so=n+180;
   const pt=(deg,r)=>[cx+r*Math.sin(deg*Math.PI/180), cy-r*Math.cos(deg*Math.PI/180)];
@@ -873,6 +892,7 @@ function legendText(){ return 'Badges: green = ready to plant · yellow = harves
 function renderPanel(){
   switch(ui.tab){
     case 'tasks': return renderTasks();
+    case 'nursery': return renderNursery();
     case 'calendar': return renderCalendar();
     case 'plants': return renderPlantsTab();
     case 'settings': return renderSettings();
@@ -883,7 +903,7 @@ function chip(x){return `<span class="chip ${x.cls}">${esc(x.label)}</span>`;}
 function plantItemHTML(x,opts={}){
   const p=x.p; const meta=`${p.d[0]}–${p.d[1]} days · ${p.per} per plot · ${p.sun==='full'?'full sun':p.sun==='partial'?'part sun':'shade ok'} · ${p.heat==='high'?'heat-proof':p.heat==='med'?'takes some heat':'cool season'}`;
   return `<div class="plant-item" data-act="detail" data-pid="${p.id}"><div class="em">${p.e}</div><div style="flex:1;min-width:0"><div class="nm">${esc(p.n)}${p.perennial?' <span class="chip info">perennial</span>':''}${p.custom?' <span class="chip">custom</span>':''}</div><div class="meta">${esc(meta)}</div>
-    <div class="row" style="gap:.3em;margin-top:.3em">${x.se?chip(x.se):''}${x.su?chip(x.su):''}${x.rot?'<span class="chip bad">Same family as last crop</span>':''}</div>${x.su?.note?`<div class="tiny muted">${esc(x.su.note)}</div>`:''}</div></div>`;
+    <div class="row" style="gap:.3em;margin-top:.3em">${x.se?chip(x.se):''}${x.su?chip(x.su):''}${x.rot?'<span class="chip bad">Same family as last crop</span>':''}${readyTrays(p.id).length?'<span class="chip info">seedlings ready in nursery</span>':nurseryOK(p)&&!state.nursery.some(t=>t.pid===p.id)?'<span class="chip">usually transplanted</span>':''}</div>${x.su?.note?`<div class="tiny muted">${esc(x.su.note)}</div>`:''}</div></div>`;
 }
 function renderPlot(){
   if(!ui.sel || !state.plots[ui.sel]) {
@@ -903,7 +923,7 @@ function renderPlot(){
   if(plot.plant && st.p){
     const p=st.p, pl=plot.plant;
     h+=`<div class="card soil"><div class="row between"><div><div style="font-size:1.6rem">${p.e} <b style="font-family:Fraunces,serif;font-size:1.2rem">${esc(p.n)}</b></div>${pl.variety?`<div class="muted">${esc(pl.variety)}</div>`:''}</div><button class="small ghost" data-act="detail" data-pid="${p.id}" style="color:#fff">Details</button></div>
-      <div class="kv" style="margin:.6em 0"><b style="color:rgba(255,255,255,.75)">Planted</b><span>${fmt(pl.date)} (${st.daysIn} days ago)</span><b style="color:rgba(255,255,255,.75)">Harvest</b><span>${fmt(addDays(pl.date,st.h0))} – ${fmt(addDays(pl.date,st.h1))}</span>${p.harv==='cont'?`<b style="color:rgba(255,255,255,.75)">Harvests logged</b><span>${pl.harvests||0}</span>`:''}</div>
+      <div class="kv" style="margin:.6em 0"><b style="color:rgba(255,255,255,.75)">Planted</b><span>${fmt(pl.date)} (${st.daysIn} days ago)${pl.from?` · from ${esc(FROM_LABEL[pl.from]||pl.from)}`:''}</span><b style="color:rgba(255,255,255,.75)">Harvest</b><span>${fmt(addDays(pl.date,st.h0))} – ${fmt(addDays(pl.date,st.h1))}</span>${p.harv==='cont'?`<b style="color:rgba(255,255,255,.75)">Harvests logged</b><span>${pl.harvests||0}</span>`:''}</div>
       <div class="progress" style="background:rgba(0,0,0,.35)"><i class="${st.phase==='overdue'?'overdue':(st.phase==='harvest'||st.phase==='producing'||st.phase==='soon')?'harvest':''}" style="width:${Math.min(100,st.pct*100)}%"></i></div>
       <p style="margin:.5em 0 0">${esc(st.text)}</p></div>
     <div class="row">${p.harv==='cont'||p.perennial?`<button data-act="log-harvest">Log a harvest</button>`:''}<button class="primary" data-act="clear" data-mode="harvested">Harvested &amp; clear plot</button><button class="ghost" data-act="clear" data-mode="removed">Remove without harvest</button></div>
@@ -937,12 +957,32 @@ function renderPlantNow(plot,m){
   <p class="tiny muted">${list.length} match${list.length===1?'':'es'} for a ${EXPOSURES[plot.exposure].short.toLowerCase()} plot${state.crops&&!f.all?' from your crop list':''}. Not listed? <a href="#" data-act="custom-new">Add your own plant</a> or <a href="#" data-act="choose-crops">edit your crop list</a>.</p>
   <div>${list.map(x=>plantItemHTML(x)).join('')||'<p class="muted">Nothing fits this plot right now. Try including off-peak crops, or change the plot\'s exposure.</p>'}</div>`;
 }
+function emptyPlotOptions(p){ const m=curMonth(); return Object.entries(state.plots).filter(([k,pl])=>!pl.plant).map(([k,pl])=>({k,pl,su:p?sunScore(p,pl.exposure,m):null})).sort((a,b)=>(b.su?.s||0)-(a.su?.s||0)).map(x=>`<option value="${x.k}">${esc(x.pl.name||plotLabel(...x.k.split('-').map(Number)))} · ${esc(EXPOSURES[x.pl.exposure].short)}${x.su?` · ${x.su.label.replace('Sun: ','sun ')}`:''}</option>`).join(''); }
+function renderNursery(){
+  const has=Object.keys(state.nurseryCells).length>0; const sow=sowNowCrops();
+  let h=`<div class="stack"><div class="row between"><h2>Nursery</h2><button class="primary small" data-act="sow-new">+ Sow a tray</button></div>
+  <p class="tiny muted">${has?`${Object.keys(state.nurseryCells).length*9} sq ft of seed-starting space. `:'No nursery area painted yet — add one in Settings → Edit garden layout so it shows on the map. '}Seeds started here become transplants: when a tray is ready, send it to an empty plot and the plot's harvest window is figured from the transplant date.</p>`;
+  if(state.nursery.length){ h+=`<h3>Trays</h3>`; state.nursery.slice().sort((a,b)=>a.sown.localeCompare(b.sown)).forEach(t=>{ const st=trayStatus(t); const p=st.p; if(!p) return; const empties=emptyPlotOptions(p);
+    h+=`<div class="card" style="margin-bottom:.6em"><div class="row between"><div><span style="font-size:1.4rem">${p.e}</span> <b>${esc(p.n)}</b>${t.variety?` <span class="muted">${esc(t.variety)}</span>`:''}</div><span class="chip ${st.late?'bad':st.ready?'good':''}">${st.late?'Leggy':st.ready?'Ready':'Growing'}</span></div>
+      <div class="tiny muted">${t.qty||'?'} cell${t.qty===1?'':'s'} · sown ${fmt(t.sown)} · ${st.daysIn} days · seed-to-transplant about ${Math.round(st.lead/7)} weeks</div>
+      <div class="progress" style="margin:.4em 0"><i class="${st.late?'overdue':st.ready?'harvest':''}" style="width:${st.pct*100}%"></i></div><div class="tiny">${esc(st.text)}</div>
+      ${t.notes?`<div class="tiny muted" style="margin-top:.3em">${esc(t.notes)}</div>`:''}
+      <div class="row" style="margin-top:.5em">${empties?`<select data-tray="${t.id}" style="width:auto;flex:1;min-width:150px">${empties}</select><button class="small primary" data-act="transplant" data-id="${t.id}">Transplant there</button>`:'<span class="tiny muted">No empty plots to transplant into</span>'}<button class="small ghost" data-act="tray-del" data-id="${t.id}">Remove</button></div></div>`; }); }
+  else h+=`<p class="muted">Nothing in the nursery.</p>`;
+  if(sow.length) h+=`<hr><h3>Start seeds now</h3><p class="tiny muted">These crops on your list are transplanted, and seeds sown today will be ready when their planting window is open.</p><ul class="alert-list">${sow.map(p=>`<li data-act="sow-new" data-pid="${p.id}"><span>${p.e}</span><span><b>${esc(p.n)}</b> <span class="tiny muted">· ~${Math.round(leadOf(p)/7)} weeks to transplant size · plant out ${esc(monthLabel(windows(p).prime))}</span></span></li>`).join('')}</ul>`;
+  h+=`<hr><p class="tiny muted">Rule of thumb: tomatoes and brassicas need 5–6 weeks from seed, peppers and eggplant 7–8, lettuce 4. In South Florida start fall transplants in August under shade cloth — the nursery is also where you harden seedlings off for a few days before they go in the ground.</p></div>`; return h; }
+function showSowForm(pid){ const list=allPlants().filter(p=>growing(p.id)||pid===p.id).sort((a,b)=>(nurseryOK(b)?1:0)-(nurseryOK(a)?1:0)||a.n.localeCompare(b.n));
+  openDialog(`<div class="row between"><h2>Sow a tray</h2><button class="ghost" data-act="dlg-close" aria-label="Close">✕</button></div>
+  <label>Plant</label><select id="sowPid">${list.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${p.e} ${esc(p.n)}${nurseryOK(p)?'':' (usually direct-sown)'}</option>`).join('')}</select>
+  <div class="grid2"><div><label>Cells / seedlings</label><input id="sowQty" type="number" min="1" value="6"></div><div><label>Sown on</label><input id="sowDate" type="date" value="${iso(today())}"></div></div>
+  <label>Variety <span class="hint">(optional)</span></label><input id="sowVar"><label>Notes</label><input id="sowNotes" placeholder="tray location, soil mix…">
+  <div class="row" style="margin-top:1em"><button class="primary" data-act="sow-save">Add to nursery</button><button class="ghost" data-act="dlg-close">Cancel</button></div>`); }
 function renderTasks(){
   const all=allAlerts(); const groups=[['harvest','Harvest'],['overdue','Clear and replant'],['plant','Ready to plant'],['task','Reminders and rest'],['warn','Weather watch']];
   let h=`<div class="stack"><h2>Tasks for ${fmt(today())}</h2><div class="card"><b>${esc(seasonInfo(curMonth()).t)}</b><p class="tiny muted" style="margin:.3em 0 0">${esc(seasonInfo(curMonth()).d)}</p></div>`;
   if(!all.length) h+=`<p class="muted">Nothing needs attention. Map some plots or come back after planting.</p>`;
   groups.forEach(([t,title])=>{ const items=all.filter(a=>a.type===t); if(!items.length) return;
-    h+=`<h3>${title} <span class="muted" style="font-weight:400">(${items.length})</span></h3><ul class="alert-list">${items.map(a=>`<li data-act="select" data-k="${a.k}"><span class="dot ${a.type}"></span><span><b>${esc(a.label)}</b> — ${esc(a.text)}</span></li>`).join('')}</ul>`; });
+    h+=`<h3>${title} <span class="muted" style="font-weight:400">(${items.length})</span></h3><ul class="alert-list">${items.map(a=>`<li data-act="${a.nursery?'tab':'select'}" data-tab="nursery" data-k="${a.k||''}"><span class="dot ${a.type}"></span><span><b>${esc(a.label)}</b> — ${esc(a.text)}</span></li>`).join('')}</ul>`; });
   h+=`<hr><h3>Month notes for zone ${state.zone}</h3>${monthNotes(curMonth())}</div>`; return h;
 }
 function monthNotes(m){
@@ -1022,6 +1062,8 @@ function showDetail(pid){
     ${se.s===0?'<p class="chip bad">Out of season — you can still plant it, but expect trouble.</p>':''}
     <label>Variety</label><input id="plVariety" list="varList" placeholder="Optional"><datalist id="varList">${vars.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
     <label>Planting date</label><input id="plDate" type="date" value="${iso(today())}">
+    <label>Started from</label><select id="plFrom">${['transplant','seed','other'].map(f=>{const d=startOf(p)==='either'?'transplant':startOf(p); const adj=daysAdjust(p,f); return `<option value="${f}" ${f===d?'selected':''}>${FROM_LABEL[f]}${adj>0?` (+${adj} days to harvest)`:adj<0?` (${adj} days)`:''}</option>`;}).join('')}</select>
+    ${readyTrays(p.id).length?`<p class="tiny" style="margin-top:.4em">You have ${readyTrays(p.id).reduce((a,t)=>a+(t.qty||0),0)} seedlings of this ready in the nursery — transplant them from the Nursery tab and the tray is cleared for you.</p>`:nurseryOK(p)?`<p class="tiny muted" style="margin-top:.4em">Usually set out as a transplant. Sowing seed straight in the plot works but adds ${leadOf(p)} days.</p>`:''}
     <div class="row" style="margin-top:1em"><button class="primary" data-act="plant" data-pid="${p.id}">Plant it</button><button class="ghost" data-act="dlg-close">Cancel</button></div>`:''}
   ${p.custom?`<hr><div class="row"><button data-act="custom-edit" data-pid="${p.id}">Edit</button><button class="danger" data-act="custom-del" data-pid="${p.id}">Delete</button></div>`:''}`);
 }
@@ -1073,12 +1115,13 @@ function renderWizard(){
     <div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-next">Continue</button></div>`;
   if(step===2){
     const sz=paintCellPx(); const cells=[]; for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++) cells.push(paintCellHTML(r,c,sz));
-    body=`<h2>Paint the house and the plots</h2><p class="help">Pick a brush, then click or drag across the squares. For big areas use Rectangle: tap one corner, then the opposite corner (on a keyboard, shift-click does the same). Paint the house footprint first so you can see where the beds sit relative to it. Judge each plot's exposure on a spring day: direct sun before noon, after noon, all day, or barely at all? Click the compass to point north the way your yard actually faces.</p>
+    body=`<h2>Paint the house and the plots</h2><p class="help">Pick a brush, then click or drag across the squares. For big areas use Rectangle: tap one corner, then the opposite corner (on a keyboard, shift-click does the same). Paint the house footprint first so you can see where the beds sit relative to it, and a small Nursery area — a shelf, bench or cold frame where you start seeds in trays before transplanting. Judge each plot's exposure on a spring day: direct sun before noon, after noon, all day, or barely at all? Click the compass to point north the way your yard actually faces.</p>
     <div class="painter"><div><div class="painttools"><button class="small" data-act="pz" data-z="-" aria-label="Smaller squares">−</button><button class="small" data-act="pz" data-z="fit">Fit</button><button class="small" data-act="pz" data-z="+" aria-label="Bigger squares">+</button><button class="small ${ui.rectMode?'active':''}" data-act="rect-mode" title="Tap one corner, then the opposite corner, to fill a rectangle">▭ Rectangle${ui.rectMode&&ui.anchor?' — now tap the opposite corner':''}</button></div>
       <div class="paintgrid" id="paintgrid" style="grid-template-columns:repeat(${state.cols},${sz}px)">${cells.join('')}</div>
       <p class="tiny muted" id="paintCount" style="margin-top:.6em">${paintCountText()}</p></div>
       <div class="stack"><div class="exposure-key" style="grid-template-columns:1fr">
         <button class="${ui.brush==='house'?'active':''}" data-act="brush" data-brush="house"><span style="width:22px;text-align:center">🏠</span><span>House footprint</span></button>
+        <button class="${ui.brush==='nursery'?'active':''}" data-act="brush" data-brush="nursery"><span style="width:22px;text-align:center">🌱</span><span>Nursery (seed starting)</span></button>
         ${Object.entries(EXPOSURES).map(([id,e])=>`<button class="${ui.brush===id?'active':''}" data-act="brush" data-brush="${id}"><svg width="22" height="22" viewBox="0 0 22 22">${exposureIcon(id,11,11,8)}</svg><span>${e.label}</span></button>`).join('')}
         <button class="${ui.brush==='erase'?'active':''}" data-act="brush" data-brush="erase"><span style="width:22px;text-align:center">✕</span><span>Erase (lawn / open ground)</span></button></div>
         <div class="compass"><div class="rose" data-act="rotate" title="Click to rotate"><i style="transform:rotate(${state.north}deg)"></i><b style="top:4px">N</b><b style="right:6px">E</b><b style="bottom:4px">S</b><b style="left:4px">W</b></div><div class="tiny muted">North points <b>${state.north}°</b> from the top of the map. Click to rotate. The sun crosses the south side of your garden, so anything tall on a plot's south edge will shade it in winter.</div></div>
@@ -1102,15 +1145,16 @@ function renderWizard(){
   if(step===2) wirePaint();
 }
 function paintCellPx(){ const avail=(isMobile()? window.innerWidth-2*1.2*16 : 880)-12-(state.cols-1)*2; return Math.max(8,Math.min(44,Math.floor(avail/state.cols*(ui.paintZoom||1)))); }
-function paintCellHTML(r,c,sz){ const k=plotKey(r,c),p=state.plots[k],h=state.house[k]; const ico=sz>=24;
-  return `<button class="${p?'plot':h?'house':''}" data-k="${k}" style="width:${sz}px;height:${sz}px" title="${plotLabel(r,c)}${h?' · house':p?' · '+EXPOSURES[p.exposure].label:''}">${p&&ico?`<svg width="${Math.min(22,sz-8)}" height="${Math.min(22,sz-8)}" viewBox="0 0 22 22">${exposureIcon(p.exposure,11,11,8)}</svg>`:''}</button>`; }
-function paintCountText(){ const n=Object.keys(state.plots).length, hh=Object.keys(state.house).length; return `${state.propW} × ${state.propD} ft · 1 square = 3 ft · ${n} plot${n===1?'':'s'} (${n*9} sq ft of growing space) · house ${hh*9} sq ft`; }
+function paintCellHTML(r,c,sz){ const k=plotKey(r,c),p=state.plots[k],h=state.house[k],nu=state.nurseryCells[k]; const ico=sz>=24;
+  return `<button class="${p?'plot':h?'house':nu?'nursery':''}" data-k="${k}" style="width:${sz}px;height:${sz}px" title="${plotLabel(r,c)}${h?' · house':nu?' · nursery':p?' · '+EXPOSURES[p.exposure].label:''}">${nu&&ico?'🌱':''}${p&&ico?`<svg width="${Math.min(22,sz-8)}" height="${Math.min(22,sz-8)}" viewBox="0 0 22 22">${exposureIcon(p.exposure,11,11,8)}</svg>`:''}</button>`; }
+function paintCountText(){ const n=Object.keys(state.plots).length, hh=Object.keys(state.house).length, nn=Object.keys(state.nurseryCells).length; return `${state.propW} × ${state.propD} ft · 1 square = 3 ft · ${n} plot${n===1?'':'s'} (${n*9} sq ft of growing space) · house ${hh*9} sq ft · nursery ${nn*9} sq ft`; }
 function paintCell(k){
-  if(ui.brush==='erase'){ delete state.plots[k]; delete state.house[k]; }
-  else if(ui.brush==='house'){ delete state.plots[k]; state.house[k]=true; }
-  else { delete state.house[k]; const p=state.plots[k]; if(p) p.exposure=ui.brush; else state.plots[k]={exposure:ui.brush,plant:null,tasks:[],history:[]}; }
+  if(ui.brush==='erase'){ delete state.plots[k]; delete state.house[k]; delete state.nurseryCells[k]; }
+  else if(ui.brush==='house'){ delete state.plots[k]; delete state.nurseryCells[k]; state.house[k]=true; }
+  else if(ui.brush==='nursery'){ delete state.plots[k]; delete state.house[k]; state.nurseryCells[k]=true; }
+  else { delete state.house[k]; delete state.nurseryCells[k]; const p=state.plots[k]; if(p) p.exposure=ui.brush; else state.plots[k]={exposure:ui.brush,plant:null,tasks:[],history:[]}; }
 }
-function paintAndRefresh(k){ const before=JSON.stringify([state.plots[k]||null,!!state.house[k]]); paintCell(k); if(JSON.stringify([state.plots[k]||null,!!state.house[k]])===before) return;
+function paintAndRefresh(k){ const before=JSON.stringify([state.plots[k]||null,!!state.house[k],!!state.nurseryCells[k]]); paintCell(k); if(JSON.stringify([state.plots[k]||null,!!state.house[k],!!state.nurseryCells[k]])===before) return;
   save(); const b=$(`#paintgrid button[data-k="${k}"]`); if(b){ const [r,c]=k.split('-').map(Number); b.outerHTML=paintCellHTML(r,c,paintCellPx()); } const pc=$('#paintCount'); if(pc) pc.textContent=paintCountText(); const fin=$('.painter')?.closest('.wizard')?.querySelector('[data-act="wiz-next"].primary, [data-act="wiz-finish"]'); if(fin) fin.disabled=!Object.keys(state.plots).length; }
 function wirePaint(){
   const g=$('#paintgrid'); if(!g) return;
@@ -1125,9 +1169,10 @@ let _rz; window.addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(
 /* ============================================================ tutorial */
 const TOUR=[
  {sel:null,t:'Welcome to Plot & Season',b:'A one-minute tour. Replay it any time from Settings, or switch it off there.'},
- {sel:'.mapwrap',t:'Your garden from above',b:'Every square is a 3 ft plot in its real spot on the property. Badges: green = ready to plant, yellow = harvest, red = clear it, blue dot = heat or cold watch. Use − / Fit / + to zoom; tap the compass to rotate north.'},
+ {sel:'.mapwrap',t:'Your garden from above',b:'Every square is a 3 ft plot in its real spot on the property; the grey block is the house and the light-green patch is the nursery. Badges: green = ready to plant, yellow = harvest, red = clear it, blue dot = heat or cold watch. Use − / Fit / + to zoom; tap the compass to rotate north.'},
  {sel:'[data-tab="plot"]',t:'Tap a plot',b:'An empty plot shows what you can plant right now — from your crop list, filtered by the month and that plot\'s sun. A planted plot shows days to harvest, reminders, and what could follow it.'},
- {sel:'[data-tab="tasks"]',t:'Tasks',b:'Everything that needs doing across the garden this week, plus month notes for zone 10.'},
+ {sel:'[data-tab="nursery"]',t:'Nursery',b:'Where seeds become transplants. It tells you when to start seeds so they are ready as each crop\'s window opens, tracks the trays, and moves ready seedlings straight into an empty plot.'},
+ {sel:'[data-tab="tasks"]',t:'Tasks',b:'Everything that needs doing across the garden this week — harvests, plots to clear, seeds to start, trays to transplant — plus month notes for zone 10.'},
  {sel:'[data-tab="calendar"]',t:'Calendar',b:'When each crop goes in the ground here — October to March is the main season, summer is for tropicals.'},
  {sel:'[data-tab="plants"]',t:'Library',b:'All 131 researched edibles plus your own. Tick the ones you grow, or add a plant with its own parameters.'},
  {sel:'[data-tab="settings"]',t:'Settings',b:'Change your crop list, edit the layout, plan for a future date, and export a backup. Done!'},
@@ -1144,7 +1189,8 @@ function scrollToPlot(k){ const el=document.querySelector(`g.plot[data-k="${k}"]
 function selectPlot(k,scroll){ ui.sel=k; ui.tab='plot'; render(); if(scroll) scrollToPlot(k); if(isMobile()&&!scroll){ const p=document.querySelector('aside.panel'); if(p) p.scrollIntoView({behavior:'smooth',block:'start'}); } }
 function doPlant(pid){
   const plot=state.plots[ui.sel]; if(!plot) return; const p=plantById(pid);
-  plot.plant={pid,variety:$('#plVariety')?.value.trim()||'',date:$('#plDate')?.value||iso(today()),notes:'',harvests:0};
+  const from=$('#plFrom')?.value||'transplant';
+  plot.plant={pid,variety:$('#plVariety')?.value.trim()||'',date:$('#plDate')?.value||iso(today()),from,adj:daysAdjust(p,from),notes:'',harvests:0};
   save(); closeDialog(); toast(`Planted ${p.n}`); render();
 }
 function clearPlot(mode){
@@ -1160,16 +1206,23 @@ function importData(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const
     if(s&&Array.isArray(s.plantLibrary)){ const r=mergeLibrary(s.plantLibrary); toast(`Library: ${r.added} added, ${r.updated} updated`); render(); return; }
     const g=s&&s.garden?s.garden:s; if(!g||typeof g!=='object'||!g.plots) throw 0;
     if(s.library&&Array.isArray(s.library.customPlants)) mergeLibrary(s.library.customPlants); else if(Array.isArray(g.customPlants)) mergeLibrary(g.customPlants);
-    delete g.customPlants; state=Object.assign(fresh(),g); state.house=state.house||{}; if(!state.propW){state.propW=state.cols*3; state.propD=state.rows*3;} save(); ui.sel=null; toast('Backup imported'); render(); }catch(e){ toast('That file is not a garden or library backup.'); } }; rd.readAsText(file); }
+    delete g.customPlants; state=Object.assign(fresh(),g); state.house=state.house||{}; state.nurseryCells=state.nurseryCells||{}; state.nursery=state.nursery||[]; if(!state.propW){state.propW=state.cols*3; state.propD=state.rows*3;} save(); ui.sel=null; toast('Backup imported'); render(); }catch(e){ toast('That file is not a garden or library backup.'); } }; rd.readAsText(file); }
 function importLibraryFile(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const s=JSON.parse(rd.result); const list=Array.isArray(s)?s:s.plantLibrary||s.library?.customPlants||s.customPlants||s.garden?.customPlants; if(!Array.isArray(list)) throw 0; const r=mergeLibrary(list); toast(`Library: ${r.added} added, ${r.updated} updated`); render(); }catch(e){ toast('That file is not a plant library.'); } }; rd.readAsText(file); }
 
 document.addEventListener('click',e=>{
   const g=e.target.closest('g.plot'); if(g){ selectPlot(g.dataset.k); return; }
+  const gn=e.target.closest('g[data-nursery]'); if(gn){ ui.tab='nursery'; render(); if(isMobile()){ const p=document.querySelector('aside.panel'); if(p) p.scrollIntoView({behavior:'smooth',block:'start'}); } return; }
   const el=e.target.closest('[data-act]'); if(!el) return; const act=el.dataset.act;
   if(el.tagName==='A') e.preventDefault();
   switch(act){
     case 'tab': ui.tab=el.dataset.tab; ui.filter.q=''; render(); break;
     case 'select': selectPlot(el.dataset.k,true); break;
+    case 'sow-new': showSowForm(el.dataset.pid||null); break;
+    case 'sow-save': { const pid=$('#sowPid').value; if(!pid) return; state.nursery.push({id:Date.now(),pid,qty:Math.max(1,Number($('#sowQty').value)||1),sown:$('#sowDate').value||iso(today()),variety:$('#sowVar').value.trim(),notes:$('#sowNotes').value.trim()}); save(); closeDialog(); ui.tab='nursery'; toast('Tray added to the nursery'); render(); break; }
+    case 'tray-del': state.nursery=state.nursery.filter(t=>String(t.id)!==el.dataset.id); save(); render(); break;
+    case 'transplant': { const t=state.nursery.find(x=>String(x.id)===el.dataset.id); const sel=document.querySelector(`select[data-tray="${el.dataset.id}"]`); if(!t||!sel||!sel.value) return; const plot=state.plots[sel.value]; if(!plot||plot.plant){ toast('That plot is no longer empty'); render(); return; } const p=plantById(t.pid);
+      plot.plant={pid:t.pid,variety:t.variety||'',date:iso(today()),from:'transplant',adj:0,notes:t.notes?`From nursery tray sown ${fmt(t.sown)}. ${t.notes}`:`From nursery tray sown ${fmt(t.sown)}.`,harvests:0};
+      state.nursery=state.nursery.filter(x=>x.id!==t.id); save(); toast(`${p?p.n:'Seedlings'} transplanted into ${plot.name||plotLabel(...sel.value.split('-').map(Number))}`); selectPlot(sel.value,true); break; }
     case 'rotate': state.north=(state.north+45)%360; save(); state.setup?render():renderWizard(); break;
     case 'detail': showDetail(el.dataset.pid); break;
     case 'dlg-close': closeDialog(); break;
@@ -1183,7 +1236,7 @@ document.addEventListener('click',e=>{
     case 'custom-save': saveCustom(); break;
     case 'custom-del': { const id=el.dataset.pid; const inUse=Object.values(state.plots).some(p=>p.plant?.pid===id); if(inUse){ toast('Clear the plots using this plant first.'); return; } if(!confirm('Delete this plant from your library?')) return; library.customPlants=library.customPlants.filter(c=>c.id!==id); saveLibrary(); closeDialog(); render(); break; }
     case 'wiz-zone': state.zone=el.dataset.zone; save(); renderWizard(); break;
-    case 'wiz-next': if(ui.wizStep===1){ const w=Math.max(3,Math.min(300,Number($('#wW').value)||80)), d=Math.max(3,Math.min(300,Number($('#wD').value)||120)); const {rows:r,cols:c}=dimsFromProperty(w,d); state.propW=w; state.propD=d; state.rows=r; state.cols=c; state.settings.zoom=null; state.name=$('#wName').value.trim()||'My garden'; [state.plots,state.house].forEach(o=>Object.keys(o).forEach(k=>{const [rr,cc]=k.split('-').map(Number); if(rr>=r||cc>=c) delete o[k];})); } ui.wizStep++; save(); renderWizard(); break;
+    case 'wiz-next': if(ui.wizStep===1){ const w=Math.max(3,Math.min(300,Number($('#wW').value)||80)), d=Math.max(3,Math.min(300,Number($('#wD').value)||120)); const {rows:r,cols:c}=dimsFromProperty(w,d); state.propW=w; state.propD=d; state.rows=r; state.cols=c; state.settings.zoom=null; state.name=$('#wName').value.trim()||'My garden'; [state.plots,state.house,state.nurseryCells].forEach(o=>Object.keys(o).forEach(k=>{const [rr,cc]=k.split('-').map(Number); if(rr>=r||cc>=c) delete o[k];})); } ui.wizStep++; save(); renderWizard(); break;
     case 'wiz-back': ui.wizStep=Math.max(0,ui.wizStep-1); renderWizard(); break;
     case 'wiz-finish': state.setup=true; ui.wizStep=0; save(); render(); { const first=Object.keys(state.plots)[0]; if(first) scrollToPlot(first); } if(state.settings.tutorial!==false) startTour(); break;
     case 'choose-crops': state.setup=false; ui.wizStep=3; save(); renderWizard(); break;
