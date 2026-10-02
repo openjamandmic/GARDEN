@@ -156,6 +156,8 @@ aside.panel{background:var(--panel); border-left:1px solid var(--line); display:
 .paintgrid button{padding:0; border:1px solid var(--lawn-line); background:transparent; border-radius:3px; display:flex; align-items:center; justify-content:center}
 .paintgrid button.plot{background:var(--soil); border-color:var(--soil-dark)}
 .paintgrid button.house{background:var(--house); border-color:var(--house)}
+.paintgrid button.out{background:transparent; border-color:transparent; cursor:default; opacity:0}
+.paintgrid button.out:hover{outline:none}
 .paintgrid button.nursery{background:var(--nursery); border-color:var(--nursery-line); font-size:12px}
 .paintgrid{touch-action:none}
 .paintgrid button:hover{outline:2px solid var(--sun); outline-offset:-2px}
@@ -678,9 +680,29 @@ function seasonInfo(m){
 const KEY='plotAndSeason.v1', LIBKEY='plotAndSeason.library.v1';
 let state=null, library={customPlants:[]};
 const ui={tab:'plot',sel:null,filter:{cat:'',q:'',sort:'best',shoulder:false,all:false},calCat:'',brush:'full',wizStep:0,wizDrag:false,paintZoom:1,rectMode:false,anchor:null};
-function fresh(){return {version:3,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,rows:40,cols:27,north:0,plots:{},house:{},nurseryCells:{},nursery:[],crops:null,settings:{dateOverride:null,theme:'auto',zoom:null,tutorial:true}};}
+function fresh(){return {version:3,setup:false,name:'My garden',zone:'10a',propW:80,propD:120,lot:{mode:'rect',wf:80,wb:80,la:120,lb:120},rows:40,cols:27,north:0,plots:{},house:{},nurseryCells:{},nursery:[],crops:null,settings:{dateOverride:null,theme:'auto',zoom:null,tutorial:true}};}
 function dimsFromProperty(w,d){ return {cols:Math.max(1,Math.min(100,Math.ceil(w/3))),rows:Math.max(1,Math.min(100,Math.ceil(d/3)))}; }
-function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null,tutorial:true},s.settings||{}); if(s.crops===undefined)s.crops=null; s.nurseryCells=s.nurseryCells||{}; s.nursery=s.nursery||[]; if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } return s;} }catch(e){} return fresh(); }
+/* Lot geometry. A four-sided lot is treated as a trapezoid: front and back edges parallel, front along the bottom of the map.
+   wf = front width, wb = back width, la = left depth, lb = right depth (all in feet). Returns polygon points in feet with the
+   bounding box moved to the origin. */
+function lotShape(lot){ lot=lot||state.lot; if(!lot||lot.mode!=='quad'){ const w=lot?lot.wf:state.propW, d=lot?lot.la:state.propD; return {pts:[[0,0],[w,0],[w,d],[0,d]],w,d,mode:'rect'}; }
+  const wf=Math.max(3,+lot.wf||0), wb=Math.max(3,+lot.wb||0), la=Math.max(3,+lot.la||0), lb=Math.max(3,+lot.lb||0); const D=wf-wb; let dl,dr,h;
+  if(Math.abs(D)<0.01){ dl=0; dr=0; h=(la+lb)/2; } else { dl=(D+(la*la-lb*lb)/D)/2; dr=D-dl; h=Math.sqrt(Math.max(1,la*la-dl*dl)); if(!isFinite(h)||h<3){ h=Math.min(la,lb); } }
+  // y grows downward on the map; front edge (wf) at the bottom
+  const back=[[dl,0],[dl+wb,0]], front=[[wf,h],[0,h]]; let pts=[back[0],back[1],front[0],front[1]];
+  const minx=Math.min(...pts.map(p=>p[0])), maxx=Math.max(...pts.map(p=>p[0])); pts=pts.map(([x,y])=>[x-minx,y]);
+  return {pts,w:maxx-minx,d:h,mode:'quad',dl,dr}; }
+function pointInPoly(x,y,pts){ let inside=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+let _lotKey='',_lotOut=null;
+function outsideLot(r,c){ const key=JSON.stringify(state.lot)+state.rows+'x'+state.cols; if(_lotKey!==key){ _lotKey=key; _lotOut=new Set(); const sh=lotShape(); if(sh.mode!=='rect'){ for(let rr=0;rr<state.rows;rr++) for(let cc=0;cc<state.cols;cc++){ if(!pointInPoly(cc*3+1.5,rr*3+1.5,sh.pts)) _lotOut.add(plotKey(rr,cc)); } } } return _lotOut.has(plotKey(r,c)); }
+function applyLot(lot){ state.lot=lot; const sh=lotShape(lot); state.propW=Math.round(sh.w); state.propD=Math.round(sh.d); const {rows,cols}=dimsFromProperty(sh.w,sh.d); state.rows=rows; state.cols=cols; _lotKey='';
+  [state.plots,state.house,state.nurseryCells].forEach(o=>Object.keys(o).forEach(k=>{const [rr,cc]=k.split('-').map(Number); if(rr>=rows||cc>=cols||outsideLot(rr,cc)) delete o[k];})); }
+function lotLabel(){ const l=state.lot; if(!l||l.mode!=='quad') return `${state.propW} × ${state.propD} ft`; return `front ${l.wf} ft · back ${l.wb} ft · sides ${l.la}/${l.lb} ft`; }
+function lotSkewNote(lot){ const sh=lotShape(lot); if(sh.mode!=='quad') return ''; const skew=Math.max(Math.abs(sh.dl||0),Math.abs(sh.dr||0)); return skew>0.25*sh.w?`<div class="tiny" style="color:var(--alert);margin-top:.3em">Strongly skewed — with front and back parallel, these four lengths force this shape. Double-check the side measurements if your lot does not look like this.</div>`:''; }
+function lotPreviewSVG(lot,size){ const sh=lotShape(lot); const s=(size-16)/Math.max(sh.w,sh.d); const ox=(size-sh.w*s)/2, oy=(size-sh.d*s)/2;
+  return lotSkewNote(lot)+`<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="display:block"><polygon points="${sh.pts.map(([x,y])=>`${ox+x*s},${oy+y*s}`).join(' ')}" fill="var(--lawn)" stroke="var(--moss)" stroke-width="2" stroke-linejoin="round"/>
+    <text x="${size/2}" y="${oy+sh.d*s+12}" font-size="10" text-anchor="middle" fill="var(--muted)">front · street side</text></svg>`; }
+function load(){ try{const raw=localStorage.getItem(KEY); if(raw){const s=Object.assign(fresh(),JSON.parse(raw)); s.house=s.house||{}; s.settings=Object.assign({dateOverride:null,theme:'auto',zoom:null,tutorial:true},s.settings||{}); if(s.crops===undefined)s.crops=null; s.nurseryCells=s.nurseryCells||{}; s.nursery=s.nursery||[]; if(!s.propW){ s.propW=s.cols*3; s.propD=s.rows*3; } if(!s.lot) s.lot={mode:'rect',wf:s.propW,wb:s.propW,la:s.propD,lb:s.propD}; return s;} }catch(e){} return fresh(); }
 function loadLibrary(){ try{const raw=localStorage.getItem(LIBKEY); if(raw){const l=JSON.parse(raw); if(l&&Array.isArray(l.customPlants)) return l;} }catch(e){} return {customPlants:[]}; }
 function saveLibrary(){ try{localStorage.setItem(LIBKEY,JSON.stringify(library));}catch(e){storageOK=false;} }
 function migrateLibrary(){ // custom plants used to live inside the garden; move them to the shared library once
@@ -821,9 +843,12 @@ function exposureIcon(ex,x,y,r){ // small quadrant icon
 function renderMap(){
   const C=cellPx(), R=state.rows, Co=state.cols, PADT=68, PADL=16, PADR=16, PADB=16; const W=Math.max(Co*C+PADL+PADR,isMobile()?120:300), H=R*C+PADT+PADB; const big=C>=80, mid=C>=54; const sc=C/100;
   let s=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Garden map" style="font-family:'Nunito Sans',system-ui,sans-serif">`;
-  s+=`<rect x="${PADL-6}" y="${PADT-6}" width="${Co*C+12}" height="${R*C+12}" rx="14" fill="var(--lawn)"/>`;
+  { const sh=lotShape(); const sc0=C/3; const pts=sh.pts.map(([x,y])=>`${PADL+x*sc0},${PADT+y*sc0}`).join(' ');
+    if(sh.mode==='rect') s+=`<rect x="${PADL-6}" y="${PADT-6}" width="${Co*C+12}" height="${R*C+12}" rx="14" fill="var(--lawn)"/>`;
+    else s+=`<polygon points="${pts}" fill="var(--lawn)" stroke="var(--lawn-line)" stroke-width="2" stroke-linejoin="round"/>`; }
   for(let r=0;r<R;r++) for(let c=0;c<Co;c++){
     const x=PADL+c*C, y=PADT+r*C, k=plotKey(r,c), plot=state.plots[k];
+    if(outsideLot(r,c)) continue;
     if(state.house[k]){ s+=`<rect x="${x}" y="${y}" width="${C}" height="${C}" fill="var(--house)" stroke="var(--house)" stroke-width="1"/>`; continue; }
     if(state.nurseryCells[k]){ s+=`<g data-nursery="1" style="cursor:pointer"><rect x="${x}" y="${y}" width="${C}" height="${C}" fill="var(--nursery)" stroke="var(--nursery-line)" stroke-width="1"/>${C>=24?`<text x="${x+C/2}" y="${y+C/2}" font-size="${C*.5}" text-anchor="middle" dominant-baseline="middle">🌱</text>`:''}</g>`; continue; }
     if(!plot){ if(C>=16) s+=`<rect x="${x+1}" y="${y+1}" width="${C-2}" height="${C-2}" rx="${4*sc}" fill="none" stroke="var(--lawn-line)" stroke-dasharray="2 3"/>`; continue; }
@@ -879,7 +904,7 @@ function renderMap(){
   s+=`<polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="var(--alert)"/>`;
   s+=`<text x="${ex}" y="${ey+4}" font-size="10" text-anchor="middle" fill="var(--muted)" font-weight="700">E</text><text x="${wx}" y="${wy+4}" font-size="10" text-anchor="middle" fill="var(--muted)" font-weight="700">W</text><text x="${sx}" y="${sy+4}" font-size="10" text-anchor="middle" fill="var(--muted)" font-weight="700">S</text></g>`;
   s+=`</svg>`;
-  const cap=`<div class="mapcap" style="width:${W}px"><h2>${esc(state.name)}</h2><div class="tiny muted">${state.propW} × ${state.propD} ft · ${Object.keys(state.plots).length} plots · ${Object.keys(state.plots).length*9} sq ft growing · tap a plot for details, tap the compass to rotate north</div></div>`;
+  const cap=`<div class="mapcap" style="width:${W}px"><h2>${esc(state.name)}</h2><div class="tiny muted">${lotLabel()} · ${Object.keys(state.plots).length} plots · ${Object.keys(state.plots).length*9} sq ft growing · tap a plot for details, tap the compass to rotate north</div></div>`;
   const leg=`<div class="maplegend" style="width:${W}px">Each square is 3 ft × 3 ft. Sun rises on the E side, arcs across the S side, sets W. ${legendText()}</div>`;
   return cap+s+leg;
 }
@@ -1109,13 +1134,20 @@ function renderWizard(){
   if(step===0) body=`<h2>Where is the garden?</h2><p class="help">Only zone 10 is built out so far. The planting windows, varieties and heat warnings are tuned for South Florida's upside-down calendar: the main season runs October through March, and summer is for tropicals.</p>
     <div class="zone-pick">${ZONES.map(z=>`<button class="${state.zone===z.id?'active':''} ${z.on?'':'soon'}" data-act="wiz-zone" data-zone="${z.id}" ${z.on?'':'disabled'}><b>${z.name}</b><span class="tiny">${esc(z.desc)}</span></button>`).join('')}</div>
     <div class="row" style="margin-top:1.5em"><button class="primary" data-act="wiz-next">Continue</button></div>`;
-  if(step===1) body=`<h2>How big is the property?</h2><p class="help">Enter the lot size in feet. The map becomes a grid of 3 ft squares covering the whole property; on the next step you paint in the house footprint and the garden plots so alerts show where things actually are. Up to 300 × 300 ft. Width runs across the map, depth runs down it — you set which way is north next.</p>
-    <div class="grid2" style="max-width:420px"><div><label>Width across (ft)</label><input type="number" id="wW" min="3" max="300" value="${state.propW}"></div><div><label>Depth down (ft)</label><input type="number" id="wD" min="3" max="300" value="${state.propD}"></div></div>
-    <label style="max-width:420px">Garden name</label><input id="wName" value="${esc(state.name)}" style="max-width:420px">
-    <div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-next">Continue</button></div>`;
+  if(step===1){ const l=state.lot||{mode:'rect',wf:state.propW,wb:state.propW,la:state.propD,lb:state.propD}; const quad=(ui.lotMode||l.mode)==='quad';
+    body=`<h2>How big is the property?</h2><p class="help">The map becomes a grid of 3 ft squares covering the lot; next you paint in the house, nursery and plots. Many lots are not rectangles — if yours is wider at one end, choose <b>Four sides</b> and enter each boundary. The front (street) edge sits along the bottom of the map; you point north afterwards.</p>
+    <div class="row" style="margin-bottom:.6em"><button class="${quad?'':'primary'}" data-act="lot-mode" data-mode="rect">Rectangle</button><button class="${quad?'primary':''}" data-act="lot-mode" data-mode="quad">Four sides</button></div>
+    <div class="two-col" style="max-width:720px;align-items:start"><div>
+    ${quad?`<div class="grid2"><div><label>Front width — Width A (ft)</label><input type="number" id="lWf" min="3" max="300" value="${l.wf}"></div><div><label>Back width — Width B (ft)</label><input type="number" id="lWb" min="3" max="300" value="${l.wb}"></div></div>
+      <div class="grid2"><div><label>Left side — Length A (ft)</label><input type="number" id="lLa" min="3" max="300" value="${l.la}"></div><div><label>Right side — Length B (ft)</label><input type="number" id="lLb" min="3" max="300" value="${l.lb}"></div></div>
+      <p class="tiny muted">Left and right are as you stand in the street looking at the house. Front and back are taken as parallel, which fits almost every platted lot; the squares outside the lot line are greyed out and cannot be painted.</p>`
+     :`<div class="grid2"><div><label>Width across (ft)</label><input type="number" id="wW" min="3" max="300" value="${l.wf}"></div><div><label>Depth down (ft)</label><input type="number" id="wD" min="3" max="300" value="${l.la}"></div></div>`}
+    <label>Garden name</label><input id="wName" value="${esc(state.name)}"></div>
+    <div class="card" style="text-align:center"><div class="tiny muted" style="margin-bottom:.3em">Lot preview</div><div id="lotPreview" style="display:flex;flex-direction:column;align-items:center">${lotPreviewSVG(l,220)}</div><div class="tiny muted" id="lotDims">${Math.round(lotShape(l).w)} × ${Math.round(lotShape(l).d)} ft bounding box</div></div></div>
+    <div class="row" style="margin-top:1.5em"><button class="ghost" data-act="wiz-back">Back</button><button class="primary" data-act="wiz-next">Continue</button></div>`; }
   if(step===2){
     const sz=paintCellPx(); const cells=[]; for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++) cells.push(paintCellHTML(r,c,sz));
-    body=`<h2>Paint the house and the plots</h2><p class="help">Pick a brush, then click or drag across the squares. For big areas use Rectangle: tap one corner, then the opposite corner (on a keyboard, shift-click does the same). Paint the house footprint first so you can see where the beds sit relative to it, and a small Nursery area — a shelf, bench or cold frame where you start seeds in trays before transplanting. Judge each plot's exposure on a spring day: direct sun before noon, after noon, all day, or barely at all? Click the compass to point north the way your yard actually faces.</p>
+    body=`<h2>Paint the house and the plots</h2><p class="help">Pick a brush, then click or drag across the squares inside the lot line. For big areas use Rectangle: tap one corner, then the opposite corner (on a keyboard, shift-click does the same). Paint the house footprint first so you can see where the beds sit relative to it, and a small Nursery area — a shelf, bench or cold frame where you start seeds in trays before transplanting. Judge each plot's exposure on a spring day: direct sun before noon, after noon, all day, or barely at all? Click the compass to point north the way your yard actually faces.</p>
     <div class="painter"><div><div class="painttools"><button class="small" data-act="pz" data-z="-" aria-label="Smaller squares">−</button><button class="small" data-act="pz" data-z="fit">Fit</button><button class="small" data-act="pz" data-z="+" aria-label="Bigger squares">+</button><button class="small ${ui.rectMode?'active':''}" data-act="rect-mode" title="Tap one corner, then the opposite corner, to fill a rectangle">▭ Rectangle${ui.rectMode&&ui.anchor?' — now tap the opposite corner':''}</button></div>
       <div class="paintgrid" id="paintgrid" style="grid-template-columns:repeat(${state.cols},${sz}px)">${cells.join('')}</div>
       <p class="tiny muted" id="paintCount" style="margin-top:.6em">${paintCountText()}</p></div>
@@ -1144,11 +1176,15 @@ function renderWizard(){
     <div class="steps">${steps.map((s,i)=>`<span class="${i===step?'on':i<step?'done':''}">${i+1}. ${s}</span>`).join('')}</div>${body}</div>`;
   if(step===2) wirePaint();
 }
+function readLotForm(){ const n=(id,fb)=>Math.max(3,Math.min(300,Number($(id)?.value)||fb)); const quad=(ui.lotMode||state.lot?.mode)==='quad';
+  if(quad) return {mode:'quad',wf:n('#lWf',state.lot?.wf||80),wb:n('#lWb',state.lot?.wb||80),la:n('#lLa',state.lot?.la||120),lb:n('#lLb',state.lot?.lb||120)};
+  const w=n('#wW',state.propW), d=n('#wD',state.propD); return {mode:'rect',wf:w,wb:w,la:d,lb:d}; }
 function paintCellPx(){ const avail=(isMobile()? window.innerWidth-2*1.2*16 : 880)-12-(state.cols-1)*2; return Math.max(8,Math.min(44,Math.floor(avail/state.cols*(ui.paintZoom||1)))); }
 function paintCellHTML(r,c,sz){ const k=plotKey(r,c),p=state.plots[k],h=state.house[k],nu=state.nurseryCells[k]; const ico=sz>=24;
+  if(outsideLot(r,c)) return `<button class="out" data-out="1" style="width:${sz}px;height:${sz}px" tabindex="-1" aria-hidden="true" disabled></button>`;
   return `<button class="${p?'plot':h?'house':nu?'nursery':''}" data-k="${k}" style="width:${sz}px;height:${sz}px" title="${plotLabel(r,c)}${h?' · house':nu?' · nursery':p?' · '+EXPOSURES[p.exposure].label:''}">${nu&&ico?'🌱':''}${p&&ico?`<svg width="${Math.min(22,sz-8)}" height="${Math.min(22,sz-8)}" viewBox="0 0 22 22">${exposureIcon(p.exposure,11,11,8)}</svg>`:''}</button>`; }
-function paintCountText(){ const n=Object.keys(state.plots).length, hh=Object.keys(state.house).length, nn=Object.keys(state.nurseryCells).length; return `${state.propW} × ${state.propD} ft · 1 square = 3 ft · ${n} plot${n===1?'':'s'} (${n*9} sq ft of growing space) · house ${hh*9} sq ft · nursery ${nn*9} sq ft`; }
-function paintCell(k){
+function paintCountText(){ const n=Object.keys(state.plots).length, hh=Object.keys(state.house).length, nn=Object.keys(state.nurseryCells).length; return `${lotLabel()} · 1 square = 3 ft · ${n} plot${n===1?'':'s'} (${n*9} sq ft of growing space) · house ${hh*9} sq ft · nursery ${nn*9} sq ft`; }
+function paintCell(k){ { const [r,c]=k.split('-').map(Number); if(outsideLot(r,c)) return; }
   if(ui.brush==='erase'){ delete state.plots[k]; delete state.house[k]; delete state.nurseryCells[k]; }
   else if(ui.brush==='house'){ delete state.plots[k]; delete state.nurseryCells[k]; state.house[k]=true; }
   else if(ui.brush==='nursery'){ delete state.plots[k]; delete state.house[k]; state.nurseryCells[k]=true; }
@@ -1206,7 +1242,7 @@ function importData(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const
     if(s&&Array.isArray(s.plantLibrary)){ const r=mergeLibrary(s.plantLibrary); toast(`Library: ${r.added} added, ${r.updated} updated`); render(); return; }
     const g=s&&s.garden?s.garden:s; if(!g||typeof g!=='object'||!g.plots) throw 0;
     if(s.library&&Array.isArray(s.library.customPlants)) mergeLibrary(s.library.customPlants); else if(Array.isArray(g.customPlants)) mergeLibrary(g.customPlants);
-    delete g.customPlants; state=Object.assign(fresh(),g); state.house=state.house||{}; state.nurseryCells=state.nurseryCells||{}; state.nursery=state.nursery||[]; if(!state.propW){state.propW=state.cols*3; state.propD=state.rows*3;} save(); ui.sel=null; toast('Backup imported'); render(); }catch(e){ toast('That file is not a garden or library backup.'); } }; rd.readAsText(file); }
+    delete g.customPlants; state=Object.assign(fresh(),g); state.house=state.house||{}; state.nurseryCells=state.nurseryCells||{}; state.nursery=state.nursery||[]; if(!state.propW){state.propW=state.cols*3; state.propD=state.rows*3;} if(!state.lot) state.lot={mode:'rect',wf:state.propW,wb:state.propW,la:state.propD,lb:state.propD}; _lotKey=''; save(); ui.sel=null; toast('Backup imported'); render(); }catch(e){ toast('That file is not a garden or library backup.'); } }; rd.readAsText(file); }
 function importLibraryFile(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const s=JSON.parse(rd.result); const list=Array.isArray(s)?s:s.plantLibrary||s.library?.customPlants||s.customPlants||s.garden?.customPlants; if(!Array.isArray(list)) throw 0; const r=mergeLibrary(list); toast(`Library: ${r.added} added, ${r.updated} updated`); render(); }catch(e){ toast('That file is not a plant library.'); } }; rd.readAsText(file); }
 
 document.addEventListener('click',e=>{
@@ -1236,7 +1272,8 @@ document.addEventListener('click',e=>{
     case 'custom-save': saveCustom(); break;
     case 'custom-del': { const id=el.dataset.pid; const inUse=Object.values(state.plots).some(p=>p.plant?.pid===id); if(inUse){ toast('Clear the plots using this plant first.'); return; } if(!confirm('Delete this plant from your library?')) return; library.customPlants=library.customPlants.filter(c=>c.id!==id); saveLibrary(); closeDialog(); render(); break; }
     case 'wiz-zone': state.zone=el.dataset.zone; save(); renderWizard(); break;
-    case 'wiz-next': if(ui.wizStep===1){ const w=Math.max(3,Math.min(300,Number($('#wW').value)||80)), d=Math.max(3,Math.min(300,Number($('#wD').value)||120)); const {rows:r,cols:c}=dimsFromProperty(w,d); state.propW=w; state.propD=d; state.rows=r; state.cols=c; state.settings.zoom=null; state.name=$('#wName').value.trim()||'My garden'; [state.plots,state.house,state.nurseryCells].forEach(o=>Object.keys(o).forEach(k=>{const [rr,cc]=k.split('-').map(Number); if(rr>=r||cc>=c) delete o[k];})); } ui.wizStep++; save(); renderWizard(); break;
+    case 'wiz-next': if(ui.wizStep===1){ applyLot(readLotForm()); state.settings.zoom=null; state.name=$('#wName').value.trim()||'My garden'; } ui.wizStep++; save(); renderWizard(); break;
+    case 'lot-mode': { const cur=readLotForm(); ui.lotMode=el.dataset.mode; if(ui.lotMode==='quad'&&cur.mode==='rect'){ cur.wb=cur.wf; cur.lb=cur.la; } cur.mode=ui.lotMode; state.lot=cur; renderWizard(); break; }
     case 'wiz-back': ui.wizStep=Math.max(0,ui.wizStep-1); renderWizard(); break;
     case 'wiz-finish': state.setup=true; ui.wizStep=0; save(); render(); { const first=Object.keys(state.plots)[0]; if(first) scrollToPlot(first); } if(state.settings.tutorial!==false) startTour(); break;
     case 'choose-crops': state.setup=false; ui.wizStep=3; save(); renderWizard(); break;
@@ -1282,6 +1319,7 @@ document.addEventListener('change',e=>{
   if(e.target.id==='importLibFile' && e.target.files[0]) importLibraryFile(e.target.files[0]);
 });
 document.addEventListener('input',e=>{
+  if(['lWf','lWb','lLa','lLb','wW','wD'].includes(e.target.id)){ const l=readLotForm(); const pv=$('#lotPreview'); if(pv) pv.innerHTML=lotPreviewSVG(l,220); const dm=$('#lotDims'); if(dm) dm.textContent=`${Math.round(lotShape(l).w)} × ${Math.round(lotShape(l).d)} ft bounding box`; return; }
   const wq=e.target.closest('[data-act="wq"]'); if(wq){ ui.wq=wq.value; const pos=wq.selectionStart; renderWizard(); const n=$('[data-act="wq"]'); if(n){n.focus(); n.setSelectionRange(pos,pos);} return; }
   const el=e.target.closest('[data-act="filter-q"]'); if(!el) return;
   ui.filter.q=el.value; const pb=$('#panelBody'); const pos=el.selectionStart; pb.innerHTML=renderPanel(); const n=pb.querySelector('[data-act="filter-q"]'); if(n){n.focus(); n.setSelectionRange(pos,pos);}
@@ -1298,3 +1336,4 @@ render();
 </script>
 </body>
 </html>
+
